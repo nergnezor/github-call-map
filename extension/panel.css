@@ -1,0 +1,155 @@
+:root {
+  color-scheme: light dark;
+  font: 14px/1.45 Inter, system-ui, sans-serif;
+  --text: light-dark(#202933, #ebeff4);
+  --muted: light-dark(#596775, #a7b5c4);
+  --line: light-dark(#98a9b4, #586975);
+  --surface: light-dark(#fff, #101820);
+  --accent: light-dark(#09675d, #76dcca);
+  --tint: light-dark(#e0f5f0, #193932);
+  --plus: light-dark(#176c37, #8add9e);
+  --minus: light-dark(#a23944, #ff9ca3);
+}
+* { box-sizing: border-box }
+body { margin: 0; overflow: hidden; color: var(--text) }
+#context, #details {
+  position: absolute; inset-block: 0; overflow: auto; overscroll-behavior: contain;
+  padding: clamp(6px, 1vw, 16px); background: var(--surface); container-type: inline-size;
+}
+#context { left: 0; width: var(--pr-pane-width); border-right: 1px solid var(--line) }
+#details { right: 0; width: var(--pr-pane-width); border-left: 1px solid var(--line) }
+#callers { margin-top: 18px }
+#changes { margin-top: 18px }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 6px }
+h1 { flex: 1; font-size: 22px; margin: 0 }
+h2 { margin: 0 0 6px; font-size: 13px }
+button, select, summary { cursor: pointer; font: inherit; color: inherit }
+button, select { background: var(--surface); border: 1px solid var(--line); border-radius: 6px }
+header button { width: 30px; height: 30px; line-height: 1; font-size: 19px }
+#skip-details { position: absolute; clip-path: inset(50%); width: 1px; height: 1px; overflow: hidden }
+#skip-details:focus { position: static; clip-path: none; width: auto; height: auto; padding-inline: 8px; font-size: 13px }
+#status:empty { display: none }
+#status { margin: 3px 0 18px; color: var(--muted) }
+#changes ul { list-style: none; margin: 0; padding: 0 }
+#changes > ul { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; max-height: 58vh; overflow: auto; padding: 4px }
+.bubble {
+  display: grid; align-content: center; justify-items: center; gap: 2px; padding: 5px 8px;
+  width: 100%; min-height: 48px; max-width: 100%; text-align: center;
+  border: 1px solid var(--line); border-radius: 18px; corner-shape: squircle;
+  background: var(--bubble-fill, var(--tint));
+  list-style: none; color: var(--accent); font: 600 12px/1.2 system-ui, sans-serif;
+}
+:is(.context, .change) > details {
+  min-width: 0; border: 1px solid var(--line); border-radius: 16px; background: var(--bubble-fill, var(--tint));
+}
+.context > .bubble, .context > details > .bubble {
+  width: 100%; min-height: 68px; padding: 10px 12px; gap: 5px; border-radius: 16px; font-size: 14px;
+}
+:is(.context, .change) > details > .bubble { border: 0; background: transparent }
+#changes .context > details > ul {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; margin: 0; padding: 6px 12px 12px;
+}
+#changes .change > details > ul { margin: 0; padding: 4px 8px 8px }
+.bubble::-webkit-details-marker { display: none }
+.bubble-name { min-width: 0; max-width: 100%; overflow-wrap: anywhere }
+.tree-entry { display: flex; align-items: baseline; gap: 0.5ch; width: 100%; padding: 3px 0; text-align: start; background: transparent; border: 0; font: 12px/1.4 ui-monospace, monospace; white-space: nowrap }
+.tree-entry .bubble-name, .named-range .bubble-name { overflow: hidden; text-overflow: ellipsis }
+.tree-entry .group-size { flex: none; color: var(--muted); font-variant-numeric: tabular-nums }
+.added-lines { color: var(--plus) }
+.removed-lines { color: var(--minus) }
+.tree-entry[aria-current] { color: var(--accent); font-weight: 650 }
+.change { --bubble-fill: var(--surface) }
+.change > details:has([aria-current]), .bubble:hover {
+  box-shadow: 0 0 0 1px var(--surface), 0 0 0 2px var(--accent);
+}
+.test-case { display: block; max-width: 100%; margin-block: 4px; padding: 4px 6px; text-align: left; overflow-wrap: anywhere }
+.test-case .snippet { color: var(--muted) }
+.location { display: block; max-width: 100%; margin: 2px 0; padding: 1px 5px; overflow-wrap: anywhere; text-align: left; font: 12px/20px ui-monospace, monospace; color: var(--muted); border: 0; background: transparent }
+.location.named-range { display: flex; align-items: baseline; gap: 0.5ch; width: 100%; padding-inline: 0; white-space: nowrap }
+.named-range .reference { flex: none; font: inherit }
+.location.added { color: var(--plus) }
+.location.removed { color: var(--minus) }
+.location:has(.snippet) { width: 100%; margin-block: 4px; padding: 4px 6px; border-inline-start: 2px solid currentColor }
+.snippet { display: block; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 2; font: 12px/1.4 ui-monospace, monospace }
+.inline-edit { color: var(--text) }
+.inline-edit del, .inline-edit ins { border-radius: 3px; padding-inline: 1px }
+.inline-edit del { color: var(--minus); background: color-mix(in srgb, var(--minus) 14%, transparent); text-decoration: line-through }
+.inline-edit ins { color: var(--plus); background: color-mix(in srgb, var(--plus) 14%, transparent); text-decoration: underline }
+.reference { color: var(--muted); font: 11px/1.4 system-ui, sans-serif }
+button:hover:not(:has(.snippet)), .location:hover .reference, summary:hover, a:hover { text-decoration: underline }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
+#graph { margin-block-end: 8px }
+.entry, .focus { position: relative; min-width: 0; padding: 7px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px }
+.focus { border: 2px solid var(--accent); background: var(--tint) }
+#symbol { width: 100%; min-width: 0; font: 650 14px/1.5 ui-monospace, monospace; color: var(--accent); background: var(--tint); border: 0 }
+.rename { display: inline-grid; gap: 2px; max-width: 100%; vertical-align: top; text-align: left }
+.former-name { color: var(--muted); font: 12px/1.4 ui-monospace, monospace; text-decoration-thickness: 1px; overflow-wrap: anywhere }
+.new-name, #former-symbol:not([hidden]) + .symbol-picker { position: relative; padding-inline-start: 17px }
+.new-name::before, #former-symbol:not([hidden]) + .symbol-picker::before { content: ''; position: absolute; inset: 0 auto auto 3px; width: 9px; height: 0.65em; border: solid var(--accent); border-width: 0 0 2px 2px; border-end-start-radius: 4px }
+.new-name { color: var(--accent); font-weight: 650 }
+#symbol option { color: var(--text); background: Canvas }
+.name { max-width: 100%; text-align: left; overflow-wrap: anywhere; font: 600 13px/1.35 ui-monospace, monospace; border: 0; padding: 0 }
+.lane { position: relative; display: grid; gap: 8px; min-width: 0 }
+#incoming { padding-right: 24px }
+.caller-file { display: grid; gap: 8px; min-width: 0 }
+.outgoing { padding-left: 24px }
+.lane:not(:empty)::before, .entry::before { content: ''; position: absolute; top: 50%; width: 12px; border-top: 1px solid var(--line) }
+#incoming::before, .outgoing .entry::before { right: 0 }
+.outgoing::before, #incoming .entry::before { left: 0 }
+#incoming .entry::before { left: 100% }
+.outgoing .entry::before { right: 100% }
+.entry::after { content: ''; position: absolute; width: 0; top: -5px; bottom: -5px; border-left: 1px solid var(--line) }
+#incoming .entry::after { left: calc(100% + 12px) }
+.outgoing .entry::after { right: calc(100% + 12px) }
+.entry:first-child::after { top: 50% }
+.entry:last-child::after { bottom: 50% }
+#incoming:not(:empty)::after, .outgoing .entry > :first-child::before { content: ''; position: absolute; top: 50%; transform: translateY(-50%); border-block: 4px solid transparent; border-left: 5px solid var(--accent) }
+#incoming:not(:empty)::after { right: 0 }
+.outgoing .entry > :first-child::before { right: 100% }
+@container (max-width: 400px) {
+  .entry, .focus { padding: 3px }
+}
+
+.argument-group { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; margin-block: 8px; font-size: 12px }
+.argument-group button { padding: 2px 6px }
+#variants { margin-block: 12px }
+.argument-group strong { flex-basis: 100%; overflow-wrap: anywhere }
+.argument-group :is(button, summary) { overflow-wrap: anywhere; max-width: 100% }
+.argument-group .minority { border-inline-start: 3px solid var(--accent); font-weight: 700; padding-inline-start: 5px }
+header button:disabled { opacity: 0.4 }
+
+.review-key { display: flex; gap: 10px; font-size: 11px; color: var(--muted) }
+.review-key span::before {
+  content: ''; display: inline-block; width: 12px; height: 7px; margin-inline-end: 4px;
+  background: repeating-linear-gradient(135deg, var(--line) 0 1px, transparent 1px 3px);
+}
+.change-progress {
+  display: grid; grid-template-columns: 1fr 1fr; width: 100%; overflow: hidden;
+  border-radius: 3px; color: var(--text); font: 600 10px/1.4 system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.change-progress > :is(.removed, .added) {
+  position: relative; isolation: isolate; min-width: 0; padding-block: 1px;
+  background: linear-gradient(var(--direction), var(--fill) var(--total), var(--surface) var(--total));
+}
+.change-progress > :is(.removed, .added)::before {
+  content: ''; position: absolute; z-index: -1; inset-block: 0; width: var(--tests);
+  background: repeating-linear-gradient(135deg, var(--stripe-color) 0 1px, transparent 1px 4px);
+}
+.change-progress .removed { --stripe-color: var(--minus); --direction: to left; --fill: color-mix(in srgb, var(--minus) 30%, var(--surface)); border-inline-end: 1px solid var(--line) }
+.change-progress .added { --stripe-color: var(--plus); --direction: to right; --fill: color-mix(in srgb, var(--plus) 30%, var(--surface)) }
+.change-progress .removed::before { right: 0 }
+.change-progress .added::before { left: 0 }
+.viewed-progress {
+  grid-column: 1 / -1; padding-block: 1px; border-top: 1px solid var(--line);
+  background: linear-gradient(to right, color-mix(in srgb, var(--accent) 28%, var(--surface)) var(--viewed), var(--surface) var(--viewed));
+}
+.location.viewed .reference { color: var(--plus) }
+
+.detail-file { margin-block: 12px }
+.detail-file h3, .caller-file h3 { margin: 0 0 4px; padding-block: 4px; border-bottom: 1px solid var(--line); font: 650 13px/1.4 ui-monospace, monospace; overflow-wrap: anywhere }
+.detail-file .active-change { background: var(--tint) }
+#details .test-case .reference { margin-inline-start: 5px }
+.enum-member { margin-block: 5px; overflow-wrap: anywhere }
+.enum-member > code { display: block; font-weight: 600 }
+.snippet mark { color: var(--text); background: color-mix(in srgb, var(--accent) 28%, var(--surface)); border-radius: 2px }

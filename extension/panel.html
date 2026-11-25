@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en" class="pr-call-map-layout">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PR Call Map</title>
+<link rel="stylesheet" href="dock.css">
+<link rel="stylesheet" href="panel.css">
+<aside id="context" aria-label="Review context">
+  <header>
+    <button id="skip-details">Skip to details</button>
+    <h1 id="changes-title">Modules</h1>
+    <button id="back" title="Back to review location (Alt+Left)" aria-label="Back to review location" disabled>←</button>
+    <button id="reload" title="Refresh diff" aria-label="Refresh diff" hidden>↻</button>
+    <button id="close" title="Close map" aria-label="Close map">×</button>
+  </header>
+  <p id="status" role="status"></p>
+  <section id="changes" aria-labelledby="changes-title" hidden>
+    <div class="review-key"><span>Test lines</span></div>
+    <ul></ul>
+  </section>
+  <section id="callers" hidden>
+    <h2>Called by</h2>
+    <div id="incoming" class="lane" role="group" aria-label="Called by"></div>
+  </section>
+  <section id="variants" hidden><h2>Argument changes</h2><div></div></section>
+</aside>
+<section id="details" tabindex="-1" aria-labelledby="details-title">
+  <h2 id="details-title">Change details</h2>
+  <h2 id="enum-detail" hidden></h2>
+  <main id="graph" hidden>
+    <div class="focus">
+      <del id="former-symbol" class="former-name" hidden></del>
+      <div class="symbol-picker"><select id="symbol" aria-label="Function or call"></select></div>
+    </div>
+  </main>
+  <div id="file-groups"></div>
+</section>
+<script type="module" src="panel.mjs"></script>
+</html>

@@ -1,0 +1,103 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Diff selection test</title>
+<section role="region" id="diff-example"><table><tr><td role="gridcell" tabindex="-1" data-diff-cell="text" data-line-anchor="diff-exampleR7">
+  <code><span data-diff-text-inner>return <span>save</span>()</span></code>
+</td></tr><tr>
+  <td role="gridcell" tabindex="-1" data-diff-cell="line-number" data-diff-side="left">6</td>
+  <td role="gridcell" tabindex="-1" data-diff-cell="text" data-line-anchor="diff-exampleL6">old()</td>
+  <td role="gridcell" tabindex="-1" data-diff-cell="line-number" data-diff-side="right">8</td>
+  <td role="gridcell" tabindex="-1" data-diff-cell="text" data-line-anchor="diff-exampleR8">
+    <code><span data-diff-text-inner>function next() {}</span></code>
+  </td>
+</tr><tr>
+  <td role="gridcell" tabindex="-1" data-diff-cell="empty" data-diff-side="left"></td>
+  <td role="gridcell" tabindex="-1" data-diff-cell="line-number" data-diff-side="right" data-line-number="9">9</td>
+  <td role="gridcell" tabindex="-1" data-diff-cell="text" data-diff-side="right" data-line-number="9">
+    <code><span data-diff-text-inner>function last() {}</span></code>
+  </td>
+</tr></table></section>
+<section id="diff-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" role="region"><button aria-label="Viewed" aria-pressed="true">Viewed</button></section>
+<div id="file-tree-item-diff-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"></div>
+<script type="application/json" data-target="react-app.embeddedData">{"payload":{"diffSummaries":[{"path":"tests/offscreen.cc","markedAsViewed":true}]}}</script>
+<output>Running</output>
+<script>
+  window.chrome ??= {}
+  chrome.runtime ??= {}
+  chrome.runtime.id = 'test'
+  chrome.runtime.onConnect = { addListener: listener => { window.connect = listener } }
+</script>
+<script src="../extension/selection.js"></script>
+<script>
+  const reports = []
+  const port = {
+    name: 'diff-selection',
+    postMessage: message => reports.push(message),
+    onDisconnect: { addListener(fn) { this.disconnect = fn } },
+  }
+  connect(port)
+  const states = new Map(reports.find(report => report.viewed)?.viewed)
+  if (states.get('path:tests/offscreen.cc') !== true || states.get('#diff-' + 'a'.repeat(64)) !== true || states.get('#diff-' + 'b'.repeat(64)) !== false) {
+    throw new Error('Expected the GitHub viewed button and file tree state')
+  }
+
+  const range = document.createRange()
+  range.selectNodeContents(document.querySelector('[data-diff-text-inner] span'))
+  document.getSelection().removeAllRanges()
+  document.getSelection().addRange(range)
+  document.dispatchEvent(new Event('selectionchange'))
+  const selected = reports.at(-1)
+  if (selected?.name !== 'save' || selected.anchor !== 'diff-exampleR7') {
+    document.querySelector('output').textContent = 'Failed'
+    throw new Error('Expected the selected function and its right-side line anchor')
+  }
+  function checkFocus(selector, anchor) {
+    const cell = document.querySelector(selector)
+    cell.focus()
+    if (document.activeElement !== cell || reports.at(-1)?.anchor !== anchor) {
+      throw new Error('Expected focused diff cell to report ' + anchor)
+    }
+  }
+  const removed = document.querySelector('[data-line-anchor="diff-exampleL6"]')
+  removed.removeAttribute('data-line-anchor')
+  removed.dataset.diffSide = 'left'
+  removed.dataset.lineNumber = '6'
+  checkFocus('[data-line-number="6"]', 'diff-exampleL6')
+  checkFocus('[data-line-anchor="diff-exampleR8"]', 'diff-exampleR8')
+  checkFocus('[data-line-anchor="diff-exampleR7"]', 'diff-exampleR7')
+  checkFocus('[data-diff-side="right"]', 'diff-exampleR8')
+  const gutter = document.querySelector('[data-diff-cell="empty"]')
+  const previous = document.querySelector('[data-diff-side="right"]')
+  document.addEventListener('keydown', event => {
+    if (event.key === 'ArrowDown') gutter.focus()
+    if (event.key === 'ArrowUp') previous.focus()
+  })
+  previous.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+  if (reports.at(-1)?.anchor !== 'diff-exampleR9') throw new Error('Expected the added row from its empty gutter')
+  document.dispatchEvent(new Event('selectionchange'))
+  if (reports.at(-1)?.anchor !== 'diff-exampleR9') throw new Error('An older text selection replaced the focused row')
+  gutter.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }))
+  if (reports.at(-1)?.anchor !== 'diff-exampleR8') throw new Error('Expected the previous row after ArrowUp')
+  const added = document.querySelector('[data-line-number="9"][data-diff-cell="text"]')
+  added.removeAttribute('role')
+  checkFocus('[data-line-number="9"][data-diff-cell="text"]', 'diff-exampleR9')
+  const target = added.querySelector('[data-diff-text-inner]')
+  const clickedPoint = document.createRange()
+  clickedPoint.setStart(target.firstChild, 10)
+  clickedPoint.collapse(true)
+  document.caretRangeFromPoint = () => clickedPoint
+  target.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  if (reports.at(-1)?.name !== 'last' || !reports.at(-1)?.clicked) throw new Error('Expected the clicked function after selecting text in another cell')
+  previous.focus()
+  added.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  if (reports.at(-1)?.anchor !== 'diff-exampleR9') throw new Error('Expected the clicked code cell')
+  previous.focus()
+  port.onDisconnect.disconnect()
+  connect(port)
+  if (reports.at(-1)?.anchor !== 'diff-exampleR8') throw new Error('Expected the focused line when reopening')
+  const count = reports.length
+  chrome.runtime.id = undefined
+  gutter.focus()
+  if (reports.length !== count) throw new Error('An invalidated selection port reported a row')
+  document.querySelector('output').textContent = 'Passed'
+</script>

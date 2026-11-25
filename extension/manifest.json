@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "PR Call Map",
+  "version": "0.11.0",
+  "minimum_chrome_version": "123",
+  "description": "Follow callers and callees alongside a GitHub pull request.",
+  "action": { "default_title": "Open PR Call Map" },
+  "background": { "service_worker": "worker.js" },
+  "content_scripts": [{
+    "matches": ["https://github.com/*"],
+    "js": ["selection.js", "dock.js"],
+    "css": ["dock.css"],
+    "run_at": "document_start"
+  }],
+  "web_accessible_resources": [{
+    "resources": ["panel.html"],
+    "matches": ["https://github.com/*"]
+  }],
+  "permissions": ["storage"],
+  "host_permissions": ["https://github.com/*", "https://patch-diff.githubusercontent.com/*"]
+}

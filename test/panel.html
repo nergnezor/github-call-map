@@ -1,0 +1,180 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Active diff line test</title>
+<script type="module">
+  import { fileHash } from '../extension/graph.mjs'
+
+  const html = await (await fetch('../extension/panel.html')).text()
+  document.body.innerHTML = new DOMParser().parseFromString(html, 'text/html').body.innerHTML
+  const url = 'https://github.com/org/repo/pull/17/files'
+  const diff = [
+    'diff --git a/ui/view.js b/ui/view.js', '--- a/ui/view.js', '+++ b/ui/view.js', '@@ -0,0 +1 @@', '+function view() {}',
+    'diff --git a/net/app.js b/net/app.js', '--- a/net/app.js', '+++ b/net/app.js',
+    '@@ -1,3 +1,5 @@', ' function run() {', '   save(1)', '+  save(2)', '+   ', ' }',
+    'diff --git a/net/caller.js b/net/caller.js', '--- a/net/caller.js', '+++ b/net/caller.js',
+    '@@ -0,0 +1,3 @@', '+function caller() { run()', '+  run()', '+}',
+    'diff --git a/net/app.test.js b/net/app.test.js', '--- a/net/app.test.js', '+++ b/net/app.test.js',
+    '@@ -0,0 +1 @@', '+test("run works", () => run())',
+    'diff --git a/net/link.h b/net/link.h', '--- a/net/link.h', '+++ b/net/link.h',
+    '@@ -0,0 +1,4 @@', '+typedef enum {', '+  LINK_READY = 4,', '+  LINK_DOWN = LINK_READY', '+} Link;',
+    'diff --git a/net/link.c b/net/link.c', '--- a/net/link.c', '+++ b/net/link.c',
+    '@@ -0,0 +1 @@', '+void send_status(void) { report(LINK_READY, LINK_READY, "LINK_READY", LINK_READY_COUNT); }',
+    'diff --git a/check/flow.js b/check/flow.js', '--- a/check/flow.js', '+++ b/check/flow.js',
+    '@@ -0,0 +1,4 @@', '+function emit(state) {', '+  record(state.ready)', '+  record(state.ready)', '+}',
+    'diff --git a/check/flow.test.js b/check/flow.test.js', '--- a/check/flow.test.js', '+++ b/check/flow.test.js',
+    '@@ -0,0 +1,3 @@', '+test("ready", () => {', '+  expect(emit({}).ready)', '+})',
+    'diff --git a/check/link.c b/check/link.c', '--- a/check/link.c', '+++ b/check/link.c',
+    '@@ -0,0 +1 @@', '+void note_down(void) { record(LINK_DOWN); }',
+    'diff --git a/check/counters.c b/check/counters.c', '--- a/check/counters.c', '+++ b/check/counters.c',
+    '@@ -28,0 +29,1 @@', '+static _Atomic uint32_t displayed_frames;',
+    '@@ -42,0 +43,1 @@ void display(void)', '+  atomic_fetch_add(&displayed_frames, 1);',
+    '@@ -60,0 +61,1 @@ void reset(void)', '+  atomic_store(&displayed_frames, 0);',
+    '@@ -76,0 +77,1 @@ void report(void)', '+  uint32_t frames = atomic_exchange(&displayed_frames, 0);',
+    'diff --git a/tests/data.txt b/tests/data.txt', '--- a/tests/data.txt', '+++ b/tests/data.txt',
+    '@@ -1,6 +1 @@', '-gone', '-two', '-three', '-four', '-last', ' keep',
+  ].join('\n')
+  const messages = []
+  let selectLine, openedUrl, invalidated
+  globalThis.fetch = async () => new Response(diff)
+  globalThis.chrome ??= {}
+  Object.assign(chrome, {
+    runtime: { sendMessage: async () => 17 },
+    tabs: {
+      get: () => {
+        if (invalidated) throw new Error('Extension context invalidated.')
+        return Promise.resolve({ id: 17, url })
+      },
+      update: async (_, options) => { openedUrl = options.url },
+      sendMessage: async (_, message) => {
+        messages.push(message.type)
+        if (message.type === 'file-order') return ['tests/data.txt', 'ui/view.js', 'net/app.js', 'net/caller.js', 'net/app.test.js', 'net/link.h', 'net/link.c', 'check/flow.js', 'check/flow.test.js', 'check/counters.c', 'check/link.c']
+      },
+      connect: () => ({
+        onMessage: { addListener(fn) { selectLine = fn } },
+        onDisconnect: { addListener() {} },
+      }),
+      onUpdated: { addListener() {} },
+    },
+    storage: { local: { get: async () => ({}) } },
+  })
+  await import('../extension/panel.mjs')
+
+  async function check(path, line, ...expectedBranches) {
+    selectLine({ url, anchor: await fileHash(path) + line })
+    const branches = [...document.querySelectorAll('details[open] > summary > .bubble-name')].map(el => el.textContent)
+    if (JSON.stringify(branches) !== JSON.stringify(expectedBranches)) {
+      throw new Error(path + ' ' + line + ' selected ' + branches.join(', '))
+    }
+  }
+  selectLine({ url, theme: { scheme: 'dark', colors: { surface: '#161b22', text: '#f0f6fc' } } })
+  const rootStyle = document.documentElement.style
+  if (rootStyle.getPropertyValue('color-scheme') !== 'dark' || rootStyle.getPropertyValue('--surface') !== '#161b22') throw new Error('Expected the active GitHub theme')
+  selectLine({ url, theme: { scheme: 'light', colors: {} } })
+  if (rootStyle.getPropertyValue('color-scheme') !== 'light' || rootStyle.getPropertyValue('--surface')) throw new Error('Expected theme changes to clear obsolete overrides')
+  const tree = document.querySelector('#changes > ul')
+  if (document.querySelector('#save-review, #clear-review, #review-status')) throw new Error('Review point controls should be absent')
+  const modules = tree.querySelectorAll(':scope > li > details')
+  const moduleBubbles = [...tree.children].map(row => row.querySelector('.bubble'))
+  if (moduleBubbles.map(bubble => bubble.querySelector('.bubble-name').textContent).join(',') !== 'Repository,ui,net,check') throw new Error('Unexpected module order')
+  const [testOnly, ui, net] = moduleBubbles
+  const bar = card => card.querySelector(':scope > .change-progress')
+  const viewFile = tree.querySelector('summary[title^="ui/view.js ·"]')
+  const app = tree.querySelector('summary[title^="net/app.js ·"]')
+  if (bar(app)?.querySelector('.added').textContent !== '+3' || bar(testOnly)?.querySelector('.removed').textContent !== '−5' || bar(ui) || bar(viewFile)?.querySelector('.added').textContent !== '+1') throw new Error('Expected a single split bar with combined line totals')
+  if (bar(app).querySelector('.added').style.getPropertyValue('--tests') !== String(100 / 3) + '%' ||
+      bar(testOnly).querySelector('.removed').style.getPropertyValue('--tests') !== '100%') throw new Error('Expected proportional test stripes on both sides')
+  if (net.querySelectorAll(':scope > .change-progress').length !== 1 || tree.querySelector('.review-progress')) throw new Error('Expected one bar per bubble')
+  selectLine({ url, viewed: [
+    [await fileHash('net/link.h'), true], ['path:net/app.js', false], ['path:net/caller.js', false],
+    ['path:net/link.c', false], ['path:net/app.test.js', true], ['path:tests/data.txt', true],
+  ] })
+  if (document.querySelector('#tree-metrics')) throw new Error('Review details should be removed')
+  const viewed = module => bar(module)?.querySelector('.viewed-progress')?.textContent
+  if (viewed(net) !== '45% Viewed' || viewed(testOnly) !== '100% Viewed' || viewed(app) !== '33% Viewed' || viewed(viewFile) !== 'Viewed —') throw new Error('Expected weighted Viewed progress inside each bar')
+  if (!net.getAttribute('aria-description').includes('5 of 11 lines viewed')) throw new Error('Expected exact accessible Viewed counts')
+  selectLine({ url, viewed: [['path:net/link.h', true]] })
+  if (viewed(net) !== '≥36% Viewed') throw new Error('Partial Viewed status should show a lower bound')
+  if (tree.classList.contains('bubbles') || moduleBubbles.some(bubble => bubble.style.getPropertyValue('--width'))) throw new Error('Module cards should use the full tree width')
+  if (app.style.getPropertyValue('--width') || app.parentElement.parentElement.classList.contains('bubbles') || !net.parentElement.contains(app)) throw new Error('File cards should fill their module width')
+  if ([...modules].filter(branch => branch.open).length > 1) throw new Error('Multiple modules open on load')
+  for (const branch of modules) {
+    if (!branch.open) branch.querySelector('summary').click()
+    if ([...modules].filter(item => item.open).length !== 1) throw new Error('Clicking a module left a sibling open')
+  }
+  await check('net/app.js', 'R3', 'net', 'app.js')
+  const fileBranch = tree.querySelector('summary[title^="net/app.js ·"]').parentElement
+  const fileItems = fileBranch.querySelector('ul')
+  const functionRow = fileItems.querySelector('button.tree-entry')
+  if (!functionRow || fileItems.querySelector('details') || functionRow.firstElementChild.textContent !== '3 +2') throw new Error('Expected a single function row with its nonblank line range')
+  const context = document.querySelector('#context')
+  const details = document.querySelector('#details')
+  if (details.querySelector('#details-title')?.textContent !== 'Change details') throw new Error('Expected a visible heading for the right pane')
+  if (details.querySelector('#search')) throw new Error('Repository search should be absent from the details pane')
+  const open = [...tree.querySelectorAll('details[open] > summary.bubble')]
+  if (!open.slice(0, 2).every(bubble => bubble.querySelector('.test-count')?.textContent === '1 test · 1 test line')) throw new Error('Expected test amounts on module and file')
+  if (tree.querySelector('.test-links') || [...tree.querySelectorAll('.bubble-name')].some(name => name.textContent === 'app.test.js' || name.textContent === 'Tests')) throw new Error('Unexpected test entity in the tree')
+  if (!context?.querySelector('#changes') || !context.querySelector('#incoming')?.textContent.includes('caller')) throw new Error('Expected the tree and callers in the context pane')
+  if (!details?.querySelector('.active-change .snippet')?.textContent.includes('+  save(2)') || !details.querySelector('.outgoing')?.textContent.includes('save')) throw new Error('Expected selected code and added calls in change details')
+  const caller = [...context.querySelectorAll('#incoming .caller-file')].find(file => file.querySelector('h3')?.textContent === 'caller.js')
+  if (caller?.querySelectorAll(':scope > button.location').length !== 2 || caller.querySelector('details, .snippet') || [...caller.querySelectorAll('.bubble-name')].map(name => name.textContent).join(',') !== 'caller,caller') throw new Error('Expected caller names and line numbers without call snippets')
+  if ([...caller.querySelectorAll('.reference')].map(ref => ref.textContent).join(',') !== '1,2') throw new Error('Expected compact call-site references')
+  const sibling = tree.querySelector('summary[title^="net/caller.js ·"]')
+  sibling.click()
+  if (open[1].parentElement.open || !sibling.parentElement.open) throw new Error('Click left two file branches open')
+  open[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+  if (!open[1].parentElement.open || sibling.parentElement.open) throw new Error('ArrowRight left two file branches open')
+  await check('net/app.js', 'R2', 'net', 'app.js')
+  if (details.querySelector('.active-change.added')) throw new Error('Context line displayed as an addition')
+  await check('tests/data.txt', 'L1')
+  if (!details.querySelector('.active-change .snippet')?.textContent.includes('-gone') || !document.querySelector('#graph').closest('[hidden]')) throw new Error('Expected the deleted line without a stale function graph')
+  await check('tests/data.txt', 'L5')
+  if (details.querySelector('.active-change .snippet').textContent !== '-last') throw new Error('Expected the fifth deleted line of the range')
+  await check('tests/data.txt', 'R1')
+  const active = async (path, number) => selectLine({ url, anchor: await fileHash(path) + 'R' + number })
+  await active('net/link.h', 1)
+  const enums = details.querySelector('#enum-detail')
+  if (!enums || enums.hidden || enums.textContent !== 'Link') throw new Error('Expected enum details on its declaration')
+  const groups = () => [...details.querySelectorAll('.detail-file')]
+  const headers = () => groups().map(section => section.firstElementChild.textContent)
+  if (headers().join(',') !== 'link.h,net/link.c,check/link.c') throw new Error('Expected each filename once above its group')
+  for (const section of groups()) {
+    if (!section.firstElementChild.matches('h3') || [...section.querySelectorAll('button.location')].some(button => button.dataset.path !== section.dataset.path || !/^\d+$/.test(button.querySelector('.reference').textContent))) throw new Error('Expected line links under their own file heading')
+  }
+  if (!groups()[0].textContent.includes('LINK_READY = 4') || !groups()[0].textContent.includes('LINK_DOWN') || !groups()[1].textContent.includes('report(LINK_READY, LINK_READY,') || details.querySelectorAll('.enum-member button.location').length !== 3) throw new Error('Expected all enum members and their uses')
+  const marked = [...groups()[1].querySelectorAll('.snippet mark')].map(mark => mark.textContent)
+  if (marked.join(',') !== 'LINK_READY,LINK_READY') throw new Error('Highlight each actual enum reference only')
+  if (groups()[0].querySelector('.enum-member > code mark')) throw new Error('Highlight usage snippets only')
+  await active('check/flow.js', 2)
+  const emit = [...tree.querySelectorAll('button.tree-entry')].find(button => button.textContent.includes('emit'))
+  if (emit?.firstElementChild.textContent !== '1 +4') throw new Error('Expected the start line and change count')
+  if (emit.querySelector('.bubble-name').nextElementSibling) throw new Error('Expected the function name to come last')
+  await emit.onclick()
+  if (!openedUrl?.endsWith('R1-R4')) throw new Error('Expected a function row to open its line interval')
+  await active('check/flow.js', 2)
+  if (details.querySelectorAll('.outgoing button.location').length !== 2 || !details.querySelector('.linked-test') || details.querySelector('details')) throw new Error('Expected expanded calls, locations and tests')
+  if (!details.querySelector('.assertion')?.textContent.includes('emit({}).ready')) throw new Error('Keyboard selection should show assertions without jumping')
+  if (!details.querySelector('.active-change .snippet').textContent.includes('record(state.ready)')) throw new Error('Showing a single test must preserve the active line')
+  const counterLink = [...tree.querySelectorAll('button.location')].find(button => button.title.startsWith('check/counters.c:29'))
+  if (counterLink?.querySelector('.bubble-name')?.textContent !== 'displayed_frames') throw new Error('Expected the variable name for a single declaration')
+  const enumLink = [...tree.querySelectorAll('button.location')].find(button => button.title.startsWith('net/link.h:1–4'))
+  if (enumLink?.querySelector('.bubble-name')?.textContent !== 'Link') throw new Error('Expected the enum name for its declaration range')
+  await active('check/counters.c', 29)
+  if (headers().join(',') !== 'counters.c' || groups()[0].querySelectorAll('.reference').length !== 4 || [...groups()[0].querySelectorAll('.reference')].map(ref => ref.textContent).join(',') !== '29,43,61,77') throw new Error('Expected declaration and all three counter uses grouped in one file')
+  const highlightedUses = [...groups()[0].querySelectorAll('.snippet mark')].map(mark => mark.textContent)
+  if (highlightedUses.join(',') !== 'displayed_frames,displayed_frames,displayed_frames') throw new Error('Expected highlighted variable uses')
+  const statsButton = groups()[0].querySelector('button')
+  statsButton.focus()
+  if (document.activeElement !== statsButton) throw new Error('A grouped reference must take keyboard focus')
+  document.querySelector('#skip-details').click()
+  if (document.activeElement !== details) throw new Error('Skip to details must focus the right pane')
+  await active('net/link.h', 4)
+  if (enums.hidden) throw new Error('Expected enum details on the typedef name')
+  await active('net/app.js', 3)
+  if (!enums.hidden || details.querySelector('#graph').closest('[hidden]')) throw new Error('Expected regular details again on a function')
+  if (messages.includes('map-width')) throw new Error('Active line changed the panel widths')
+  invalidated = true
+  openedUrl = undefined
+  await functionRow.onclick()
+  if (openedUrl) throw new Error('An invalidated extension must stop the line jump')
+  document.body.append('Passed')
+</script>

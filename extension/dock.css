@@ -1,0 +1,30 @@
+html:has(> iframe#pr-call-map-panel), html.pr-call-map-layout {
+  --pr-pane-width: min(390px, 34.5vw);
+}
+html:has(> iframe#pr-call-map-panel) {
+  width: calc(100% - var(--pr-pane-width) - var(--pr-pane-width)) !important;
+  margin-left: var(--pr-pane-width) !important;
+  margin-right: var(--pr-pane-width) !important;
+}
+html:has(> iframe#pr-call-map-panel) > body {
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+html > iframe#pr-call-map-panel {
+  position: fixed !important;
+  top: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  /* Leave the GitHub diff visible and interactive between the two panes. */
+  clip-path: polygon(0 0, 100% 0, 100% 100%, calc(100% - var(--pr-pane-width)) 100%,
+    calc(100% - var(--pr-pane-width)) 0, var(--pr-pane-width) 0, var(--pr-pane-width) 100%, 0 100%) !important;
+  height: 100% !important;
+  max-width: none !important;
+  border: 0 !important;
+  z-index: 2147483646 !important;
+}
+html:has(> iframe#pr-call-map-panel) .pr-call-map-line {
+  outline: 2px solid var(--focus-outlineColor, #0969da) !important;
+  outline-offset: -2px;
+  box-shadow: inset 4px 0 var(--focus-outlineColor, #0969da);
+}
